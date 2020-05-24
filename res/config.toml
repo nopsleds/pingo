@@ -1,0 +1,17 @@
+[web]
+port = 8081
+
+[targets.demo]
+type = "http"
+url = "http://google.fr"
+
+[targets.bad]
+type = "http"
+url = "http://goosdfsdfefsegle.fr"
+
+[alerts]
+emails = [ "paul@email.com", "john@email.com" ]
+
+[alerts.webhooks.charly]
+method = "GET"
+urlTemplate = "http://test.com/troalall"
