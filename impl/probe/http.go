@@ -11,7 +11,7 @@ type HttpProbe struct {
 func (probe *HttpProbe) Test() *ProbeError {
 	_, err := http.Get(probe.URL)
 	if err != nil {
-		return ErrUnreachable
+		return &ProbeError{err.Error()}
 	}
 	return nil
 }

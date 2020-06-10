@@ -3,15 +3,17 @@ port = 8081
 
 [targets.demo]
 type = "http"
-url = "http://google.fr"
+HttpUrl = "http://google.fr"
+pollingInterval = "5s"
 
-[targets.bad]
+[targets.pingo]
 type = "http"
-url = "http://goosdfsdfefsegle.fr"
+HttpUrl = "http://localhost:8082"
+pollingInterval = "5s"
 
 [alerts]
 emails = [ "paul@email.com", "john@email.com" ]
 
-[alerts.webhooks.charly]
+[alerts.webhooks.test]
 method = "GET"
 urlTemplate = "http://test.com/troalall"

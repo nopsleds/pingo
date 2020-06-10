@@ -2,14 +2,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
-	"os"
-
-	"github.com/BurntSushi/toml"
 
 	"../../impl/config"
-	"../../impl/probe"
+	"../../impl/core"
+	"../../impl/web"
 )
 
 const (
@@ -20,38 +17,33 @@ var (
 	configFn = flag.String("f", defaultConfigPath, "path to toml config file")
 )
 
-func main() {
-
-	flag.Parse()
-
-	f, err := os.Open(*configFn)
+func panicIf(err error) {
 	if err != nil {
+		log.Fatal(err)
 		panic(err)
-	}
-
-	var config config.Config
-	_, err = toml.DecodeReader(f, &config)
-	if err != nil {
-		panic(err)
-	}
-
-	log.Printf("config = %+v", config)
-
-	for targetId, target := range config.Targets {
-		p, err := MakeProbe(target)
-		if err != nil {
-			log.Printf("error for probe '%s': %v", targetId, err)
-		} else {
-			log.Printf("probe %s  => %+v", targetId, p.Test())
-		}
 	}
 }
 
-func MakeProbe(target config.Target) (probe.Probe, error) {
-	switch target.Type {
-	case config.TypeHttp:
-		return &probe.HttpProbe{URL: target.HttpUrl}, nil
-	default:
-		return nil, fmt.Errorf("unsupported probe type '%s'", target.Type)
+func main() {
+
+	log.Println("=== rtower ===")
+	flag.Parse()
+
+	config, err := config.LoadOrInitFile(*configFn)
+	panicIf(err)
+
+	log.Printf("config = %+v", config)
+
+	instance, err := core.New(*config)
+	if err != nil {
+		log.Fatal(err)
+		panic(err)
 	}
+
+	log.Println("starting instance...")
+	panicIf(instance.Run())
+
+	log.Println("starting web...")
+	go panicIf(web.RunWeb(config.Web, instance))
+
 }
