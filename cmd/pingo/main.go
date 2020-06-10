@@ -4,9 +4,7 @@ import (
 	"flag"
 	"log"
 
-	"../../impl/config"
-	"../../impl/core"
-	"../../impl/web"
+	"github.com/nopsleds/pingo/impl"
 )
 
 const (
@@ -29,12 +27,12 @@ func main() {
 	log.Println("=== rtower ===")
 	flag.Parse()
 
-	config, err := config.LoadOrInitFile(*configFn)
+	config, err := impl.LoadOrInitFile(*configFn)
 	panicIf(err)
 
 	log.Printf("config = %+v", config)
 
-	instance, err := core.New(*config)
+	instance, err := impl.NewPingoInstance(*config)
 	if err != nil {
 		log.Fatal(err)
 		panic(err)
@@ -44,6 +42,6 @@ func main() {
 	panicIf(instance.Run())
 
 	log.Println("starting web...")
-	go panicIf(web.RunWeb(config.Web, instance))
+	go panicIf(impl.RunWeb(config.Web, instance))
 
 }
