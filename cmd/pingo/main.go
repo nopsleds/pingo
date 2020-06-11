@@ -23,14 +23,11 @@ func panicIf(err error) {
 }
 
 func main() {
-
 	log.Println("=== rtower ===")
 	flag.Parse()
 
 	config, err := impl.LoadOrInitFile(*configFn)
 	panicIf(err)
-
-	log.Printf("config = %+v", config)
 
 	instance, err := impl.NewPingoInstance(*config)
 	if err != nil {
@@ -42,6 +39,5 @@ func main() {
 	panicIf(instance.Run())
 
 	log.Println("starting web...")
-	go panicIf(impl.RunWeb(config.Web, instance))
-
+	panicIf(impl.RunWeb(config.Web, instance))
 }

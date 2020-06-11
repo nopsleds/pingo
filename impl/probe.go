@@ -25,7 +25,7 @@ var (
 func MakeProbe(target ConfigTarget) (res Probe, err error) {
 	switch target.Type {
 	case TypeHttp:
-		return &HttpProbe{URL: target.HttpUrl}, nil
+		return &HttpProbe{URL: target.HttpUrl, ExpectedStatus: target.HttpExpectedStatus}, nil
 	default:
 		return nil, fmt.Errorf("unsupported probe type '%s'", target.Type)
 	}

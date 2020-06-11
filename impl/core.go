@@ -3,21 +3,25 @@ package impl
 import (
 	"log"
 	"time"
+
+	"github.com/nopsleds/pingo/impl/timeserie"
 )
 
-type TargetStatus string
+type TargetStatus int
 
 const (
-	TargetStatusUnknown TargetStatus = "Unknown"
-	TargetStatusOk      TargetStatus = "OK"
-	TargetStatusError   TargetStatus = "Error"
+	TargetStatusUnknown TargetStatus = 0
+	TargetStatusOk      TargetStatus = 1
+	TargetStatusError   TargetStatus = 2
 )
 
 type TargetState struct {
-	LastCheck time.Time
-	Status    TargetStatus
-	Reason    string
-	Config    ConfigTarget
+	Config     ConfigTarget
+	LastCheck  time.Time
+	LastChange time.Time
+	Status     TargetStatus
+	Reason     string
+	Timeseries map[string]*timeserie.Timeserie
 }
 
 type TargetEntry struct {
@@ -44,6 +48,24 @@ func NewPingoInstance(config Config) (*PingoInstance, error) {
 	}, nil
 }
 
+func TargetTimeserie(length int, ticker timeserie.Ticker) *timeserie.Timeserie {
+	ts, err := timeserie.New(timeserie.Options{
+		DefaultValue: int(TargetStatusUnknown),
+		Ticker:       ticker,
+		Length:       length,
+		ValueReducer: func(current, newVal int) int {
+			if newVal > current {
+				return newVal
+			}
+			return current
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
+	return ts
+}
+
 func processTarget(targetConfig ConfigTarget) (*TargetEntry, error) {
 	// polling interval
 	pollingInterval, err := time.ParseDuration(targetConfig.PollingInterval)
@@ -58,6 +80,11 @@ func processTarget(targetConfig ConfigTarget) (*TargetEntry, error) {
 		State: TargetState{
 			Status: TargetStatusUnknown,
 			Config: targetConfig,
+			Timeseries: map[string]*timeserie.Timeserie{
+				"last 60m": TargetTimeserie(12, timeserie.TickByMinutes(5)),
+				"last 24h": TargetTimeserie(24, timeserie.TickByHours(1)),
+				"last 7d":  TargetTimeserie(7, timeserie.TickByDay),
+			},
 		},
 		Probe:           probe,
 		PollingInterval: pollingInterval,
@@ -80,30 +107,7 @@ func (this *PingoInstance) Run() error {
 	// handling results...
 	go func() {
 		for result := range results {
-			if targetEntry, ok := this.Targets[result.TargetName]; ok {
-				previousStatus := targetEntry.State.Status
-
-				targetEntry.State.LastCheck = time.Now()
-				newStatus := TargetStatusUnknown
-				newReason := ""
-				if result.Result != nil {
-					newStatus = TargetStatusError
-					newReason = result.Result.Error()
-				} else {
-					newStatus = TargetStatusOk
-				}
-
-				// save
-				targetEntry.State.Status = newStatus
-				targetEntry.State.Reason = newReason
-
-				if previousStatus != newStatus {
-					log.Printf("target %s changed status from %v to %v", result.TargetName, previousStatus, newStatus)
-				}
-
-			} else {
-				log.Printf("result for unknown target %s\n", result.TargetName)
-			}
+			this.processResult(result)
 		}
 	}()
 
@@ -119,6 +123,38 @@ func pollTarget(targetName string, probe Probe, pollingInterval time.Duration, r
 			TargetName: targetName,
 			Result:     result,
 		}
+	}
+}
+
+func (this *PingoInstance) processResult(result targetResult) {
+	if targetEntry, ok := this.Targets[result.TargetName]; ok {
+		previousStatus := targetEntry.State.Status
+
+		now := time.Now()
+		targetEntry.State.LastCheck = now
+		newStatus := TargetStatusUnknown
+		newReason := ""
+		if result.Result != nil {
+			newStatus = TargetStatusError
+			newReason = result.Result.Error()
+		} else {
+			newStatus = TargetStatusOk
+		}
+
+		// save
+		targetEntry.State.Status = newStatus
+		targetEntry.State.Reason = newReason
+		for _, ts := range targetEntry.State.Timeseries {
+			ts.Insert(int(newStatus))
+		}
+
+		if previousStatus != newStatus {
+			log.Printf("target %s changed status from %v to %v", result.TargetName, previousStatus, newStatus)
+			targetEntry.State.LastChange = now
+		}
+
+	} else {
+		log.Printf("result for unknown target %s\n", result.TargetName)
 	}
 }
 

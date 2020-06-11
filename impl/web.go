@@ -2,102 +2,25 @@ package impl
 
 import (
 	"fmt"
-	"html/template"
 	"log"
 	"net/http"
 	"sort"
 	"time"
-)
 
-const TPL_INDEX = `
-<!DOCTYPE html>
-<html>
-<head>
-	<meta charset="utf8"/>
-	<title>Pingo</title>
-	<link rel="stylesheet" href="style.css"/>
-</head>
-<body>
-	<header>
-        <div class="appname">Pingo</div>
-    </header>
-	<main>
-		<div class="target">
-			<div class="target-title">target</div>
-			<div class="target-title">type</div>
-			<div class="target-title">last check</div>
-			<div class="target-title">status</div>
-		</div>
-		{{ range .Targets }}
-			<div class="target target-status-{{ .Class }}">
-				<div class="target-name">{{ .Name }}</div>
-				<div class="target-type">{{ .Type }}</div>
-				<div class="target-last-check">{{ .LastCheck }}</div>
-				<div class="target-status">{{ .Status }} - {{ .Reason }}</div>
-			</div>
-		{{ end }}
-	</main>
-	<footer>current time: {{ .Now }}</footer>
-    <script>//setInterval(() => location.reload(), 1000)</script>
-</body>
-</html>
-`
-
-const TPL_STYLE_CSS = `
-html {
-	margin: 0;
-    color: #CCC;
-    background-color: black;
-    font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen-Sans,Ubuntu,Cantarell,"Helvetica Neue",sans-serif;
-}
-body {
-    padding: 48px;
-}
-header {
-    margin-bottom: 24px;
-}
-footer {
-    margin-top: 24px;
-    font-size: 12px;
-    color: #666;
-}
-.target {
-    display: grid;
-    padding: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    line-height: 24px;
-    grid-template-columns: repeat(6, 1fr);
-}
-.target-title {
-    line-height: 12px;
-    font-size: 12px;
-    color: #666;
-}
-.target.target-status-ok {
-    background-color: rgb(42, 131, 42);
-}
-.target.target-status-error {
-    background-color: rgb(197, 10, 10);
-}
-.target-name {
-    font-weight: bold;
-}
-`
-
-var (
-	tplIndex    = template.Must(template.New("index.html").Parse(TPL_INDEX))
-	tplStyleCss = template.Must(template.New("style.css").Parse(TPL_STYLE_CSS))
+	"github.com/nopsleds/pingo/impl/timeserie"
 )
 
 const dateFormat = "Jan 02, 2006 15:04:05 UTC"
 
 type IndexDataTarget struct {
-	Name      string
-	Type      string
-	LastCheck string
-	Status    string
-	Class     string
-	Reason    string
+	Name       string
+	Type       string
+	LastCheck  string
+	LastChange string
+	Status     string
+	Class      string
+	Reason     string
+	Timeseries map[string][]timeserie.Entry
 }
 type IndexData struct {
 	Now     string
@@ -137,13 +60,19 @@ func handleGetIndex(instance *PingoInstance) func(http.ResponseWriter, *http.Req
 	return func(w http.ResponseWriter, r *http.Request) {
 		var dataTargets []IndexDataTarget
 		for targetName, targetState := range instance.State() {
+			timeseries := make(map[string][]timeserie.Entry)
+			for k, ts := range targetState.Timeseries {
+				timeseries[k] = ts.Get()
+			}
 			dataTargets = append(dataTargets, IndexDataTarget{
-				Name:      targetName,
-				Type:      targetState.Config.Type,
-				LastCheck: targetState.LastCheck.Format(dateFormat),
-				Status:    statusToLabel(targetState.Status),
-				Class:     statusToClass(targetState.Status),
-				Reason:    targetState.Reason,
+				Name:       targetName,
+				Type:       targetState.Config.Type,
+				LastCheck:  targetState.LastCheck.Format(dateFormat),
+				LastChange: targetState.LastChange.Format(dateFormat),
+				Status:     statusToLabel(targetState.Status),
+				Class:      statusToClass(targetState.Status),
+				Reason:     targetState.Reason,
+				Timeseries: timeseries,
 			})
 		}
 		sort.Sort(ByName(dataTargets))
